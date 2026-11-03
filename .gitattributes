@@ -1,0 +1,2 @@
+# Preserve the published license bytes used by dependencies.lock.json.
+/docs/licenses/LGPL-2.0.txt -text

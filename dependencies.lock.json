@@ -24,6 +24,7 @@
   },
   "fridaBaseLicense": {
     "filename": "Frida-COPYING.LIB",
+    "path": "docs/licenses/LGPL-2.0.txt",
     "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.0.txt",
     "sha256": "cc535c21133c895b56b374c8a1dc1eb948d99003ed2b47372069456b62f42b24"
   },

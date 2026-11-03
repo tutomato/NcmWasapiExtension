@@ -12,7 +12,7 @@ $repo = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'dist' }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$rootFiles = @('.gitignore', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
+$rootFiles = @('.gitignore', '.gitattributes', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
     'requirements-runtime.txt', 'dependencies.lock.json', 'supported-clients.json')
 $sourceRoots = @('.github', 'src', 'tests', 'scripts', 'installer', 'docs')
 # Limit generated-folder traversal and file types as well as top-level paths.

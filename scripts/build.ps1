@@ -17,13 +17,29 @@ New-Item -ItemType Directory -Force -Path $cache, $dist | Out-Null
 $dependencyLock = Get-Content -LiteralPath (Join-Path $repo 'dependencies.lock.json') -Raw | ConvertFrom-Json
 
 function Get-PinnedDownload($item) {
-    $target = Join-Path $cache $item.filename
-    if (-not (Test-Path -LiteralPath $target)) {
-        Write-Host ('Downloading ' + $item.filename)
-        Invoke-WebRequest -Uri $item.url -OutFile $target -UseBasicParsing
+    $local = $item.PSObject.Properties.Name -contains 'path'
+    if ($local) {
+        if ([string]::IsNullOrWhiteSpace($item.path) -or [IO.Path]::IsPathRooted($item.path)) {
+            throw ('Pinned local path must be repository-relative: ' + $item.filename)
+        }
+        $target = [IO.Path]::GetFullPath((Join-Path $repo $item.path))
+        $prefix = $repo.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+        if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            throw ('Pinned local file is missing or outside the repository: ' + $item.filename)
+        }
+    } else {
+        $target = Join-Path $cache $item.filename
+        if (-not (Test-Path -LiteralPath $target)) {
+            Write-Host ('Downloading ' + $item.filename)
+            Invoke-WebRequest -Uri $item.url -OutFile $target -UseBasicParsing
+        }
     }
     $actual = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $item.sha256) { throw ('SHA256 mismatch: ' + $item.filename + '. Remove the invalid cached file before retrying.') }
+    if ($actual -ne $item.sha256) {
+        if ($local) { throw ('SHA256 mismatch in repository file: ' + $item.path) }
+        throw ('SHA256 mismatch: ' + $item.filename + '. Remove the invalid cached file before retrying.')
+    }
     return $target
 }
 function Copy-SourceFile([string]$relative, [string]$targetDirectory) {
