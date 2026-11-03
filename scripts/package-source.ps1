@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
-    [string]$Version = '0.6.0-preview.2',
+    [string]$Version = '0.7.0-preview.5',
     [string]$RepoRoot = (Join-Path $PSScriptRoot '..'),
     [string]$OutputDirectory,
     [switch]$WriteChecksums
@@ -17,7 +17,7 @@ $rootFiles = @('.gitignore', '.gitattributes', 'README.md', 'LICENSE', 'THIRD_PA
 $sourceRoots = @('.github', 'src', 'tests', 'scripts', 'installer', 'docs')
 # Limit generated-folder traversal and file types as well as top-level paths.
 # Reparse points are skipped so no linked directory can escape the repository.
-$extensions = @('.py', '.js', '.mjs', '.cs', '.c', '.h', '.s', '.def', '.ps1',
+$extensions = @('.py', '.js', '.mjs', '.cjs', '.cs', '.c', '.h', '.s', '.def', '.ps1',
     '.iss', '.md', '.txt', '.yml', '.yaml', '.json', '.svg', '.png', '.jpg', '.jpeg', '.ico')
 $files = New-Object 'System.Collections.Generic.List[object]'
 foreach ($name in $rootFiles) {

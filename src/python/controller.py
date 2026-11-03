@@ -111,7 +111,7 @@ def main(argv=None):
     if not args.enable and attach_options is None:
         print_check(report)
         return 0
-    required = ('adapter.js', 'compatibility-guard.js', 'output-option-inject.js', 'install_output_options.js')
+    required = ('adapter.js', 'compatibility-guard.js', 'output-option-inject.js', 'install_output_options.js', 'equalizer-panel.js', 'equalizer-transport.js', 'eq_settings.py')
     missing = [name for name in required if not (ROOT / name).is_file()]
     if missing:
         print_check({'ok': False, 'reason': 'runtime-resources-missing', 'files': missing})
@@ -138,6 +138,7 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
     from job_process import SuspendedProcess
     from cdp_bridge import start as start_output_bridge
     from device_capabilities import DeviceCatalog
+    import eq_settings
     if hasattr(sys.stdout, 'reconfigure'):sys.stdout.reconfigure(encoding='utf-8')
     if hasattr(sys.stdin, 'reconfigure'):sys.stdin.reconfigure(encoding='utf-8')
     attached = attach_options is not None
@@ -288,7 +289,7 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
             'activeInfo','muted','gain') if k in stats}
         keep=('id','client','generation','mode','endpointId','sourceRate','rate',
             'channels','kind','validBits','inputKind','inputBlockAlign','bufferFrames','gets','releases','frames',
-            'errors','peak')
+            'errors','peak','eqGeneration','eqProcessedFrames')
         answer['streams']=[{k:s[k] for k in keep if k in s}
             for s in stats.get('streams',[]) if isinstance(s,dict)]
         return answer
@@ -431,6 +432,7 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
             with rpc_lock:
                 script.exports_sync.command({'action':'gain','value':gain})
                 script.exports_sync.command({'action':'mute','value':muted})
+                script.exports_sync.command({'action':'eq','value':eq_settings.load()})
             if signals is not None:
                 # The native cef_initialize gate can now resume. CEF and its
                 # renderer/CDP page do not exist yet; do not wait for them here.
@@ -469,6 +471,23 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
                 with rpc_lock:
                     if ending or player_exited.is_set() or stop_requested.is_set():raise RuntimeError('输出扩展已关闭')
                     return script.exports_sync.command({'action':'gain','value':gain})
+            def set_equalizer(value):
+                if stop_requested.is_set():raise RuntimeError('输出扩展已关闭')
+                with rpc_lock:
+                    if ending or player_exited.is_set():raise RuntimeError('输出扩展已关闭')
+                    if value is not None:
+                        value=eq_settings.validate(value)
+                        previous=script.exports_sync.command({'action':'status'})['eq']
+                        script.exports_sync.command({'action':'eq','value':value})
+                        try: eq_settings.save(value)
+                        except Exception:
+                            script.exports_sync.command({'action':'eq','value':previous})
+                            raise
+                    state=script.exports_sync.command({'action':'status'})
+                    return {'config':state.get('eq',eq_settings.defaults()),
+                        'active':state.get('activeMode')=='exclusive',
+                        'peak':max((s.get('peak',0) for s in state.get('streams',[])),default=0),
+                        'rate':(state.get('activeInfo') or {}).get('rate')}
             def bridge_status(state):
                 if callbacks_allowed():audit({'event':'output-list-status',
                     **{k:state[k] for k in ('state','connected','installed','last_error',
@@ -478,7 +497,7 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
             catalog.wait_initial(3.0)
             if not callbacks_allowed():raise RuntimeError('输出扩展已关闭')
             bridge=start_output_bridge(select_mode,get_catalog=catalog.snapshot,port=debug_port,
-                set_volume=set_volume,on_status=bridge_status)
+                set_volume=set_volume,set_equalizer=set_equalizer,on_status=bridge_status)
             bridge.refreshDevices()
             emit('正在准备网易云输出设备列表……','ready')
             last=0;ui_missing_since=time.monotonic()

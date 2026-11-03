@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
-    [string]$Version = '0.6.0-preview.2',
+    [string]$Version = '0.7.0-preview.5',
     [string]$InnoCompiler,
     [string]$ZigCompiler,
     [switch]$PayloadOnly
@@ -60,9 +60,9 @@ foreach ($wheel in $dependencyLock.wheels) {
 $utf8 = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $runtime 'python312._pth'), "python312.zip`n.`nLib\site-packages`nimport site`n", $utf8)
 # Embedded Python requires no system Python, pip, or administrator access.
-$pythonFiles = 'controller.py','installation.py','compatibility.py','cdp_bridge.py','device_capabilities.py','job_process.py','attach_process.py','autoload_install.py'
+$pythonFiles = 'eq_settings.py','controller.py','installation.py','compatibility.py','cdp_bridge.py','device_capabilities.py','job_process.py','attach_process.py','autoload_install.py'
 foreach ($name in $pythonFiles) { Copy-SourceFile ('src\python\' + $name) $payload }
-$audioFiles = 'audio-bootstrap.js','convert-audio.js','native-source.js','alignment-retry.js','generic-adapter-hooks.js'
+$audioFiles = 'audio-bootstrap.js','convert-audio.js','parametric-eq.js','native-source.js','alignment-retry.js','generic-adapter-hooks.js'
 $audioParts = foreach ($name in $audioFiles) {
     [IO.File]::ReadAllText((Join-Path $repo ('src\audio\' + $name)))
 }
@@ -72,7 +72,7 @@ $guardEnd = $nativeSource.IndexOf('function createNativeSourceTracker')
 if ($guardEnd -lt 0) { throw 'Native compatibility guard is missing' }
 $guard = $nativeSource.Substring(0,$guardEnd) + "`nrpc.exports={verify(){const c=resolveNativeSourceCompatibility(globalThis.__ncmCompatibility);return {ok:true,workerRva:c.workerRva,versions:c.versions};}};`n"
 [IO.File]::WriteAllText((Join-Path $payload 'compatibility-guard.js'), $guard, $utf8)
-foreach ($name in @('output-option-inject.js','install_output_options.js')) { Copy-SourceFile ('src\frontend\' + $name) $payload }
+foreach ($name in @('output-option-inject.js','install_output_options.js','equalizer-panel.js','equalizer-transport.js')) { Copy-SourceFile ('src\frontend\' + $name) $payload }
 foreach ($name in @('supported-clients.json','dependencies.lock.json','LICENSE','README.md','THIRD_PARTY_NOTICES.md')) { Copy-SourceFile $name $payload }
 Copy-Item -LiteralPath (Join-Path $repo 'docs') -Destination (Join-Path $payload 'docs') -Recurse
 Copy-Item -LiteralPath (Join-Path $runtime 'LICENSE.txt') -Destination (Join-Path $licenses 'Python-LICENSE.txt')

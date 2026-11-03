@@ -1,4 +1,5 @@
 const conv = createConverter();
+const equalizer = createParametricEq();
 send({ event: 'converter-test', ...conv.test() });
 const records = new Map(), renders = new Map(), events = new Map();
 const contexts = new Map(), choices = new Map(), queries = new Map(), installed = new Set();
@@ -278,7 +279,7 @@ function setupClient(c) {
           for (const [key, s] of events) if (s === this.s) events.delete(key);
           events.set(this.handle.toString(), this.s);
         }
-        if (name === 'reset' && r.toInt32() === 0) this.s.credit = true;
+        if (name === 'reset' && r.toInt32() === 0) { this.s.credit = true; equalizer.reset(this.s); }
         send({ event: name, result: r.toString() });
       }
     });
@@ -316,10 +317,11 @@ function setupRender(c) {
       } else if (!(flags & 2) && frames > 0) {
         let source = s.scratch;
         if (s.inputKind !== 'f32') { conv.toFloat(s.scratch, s.floatScratch, frames * s.channels, s.inputKind); source = s.floatScratch; }
+        equalizer.process(s, source, frames);
         s.peak = Math.max(s.peak, conv.convert(source, s.buffer, frames * s.channels, s.kind, gain));
         if (frames < s.bufferFrames)
           conv.silence(s.buffer.add(frames * s.blockAlign), (s.bufferFrames - frames) * s.channels, s.kind);
-      } else flags |= 2;
+      } else { flags |= 2; equalizer.reset(s); }
       a[1] = ptr(s.bufferFrames); a[2] = ptr(muted ? flags | 2 : flags);
     },
     onLeave(r) {
@@ -357,11 +359,12 @@ rpc.exports = {
       selectionGeneration++; send({ event: 'mode-selected', ...selected, selectionGeneration });
     }
     if (c.action === 'gain' && Number.isFinite(Number(c.value))) gain = Math.max(0, Math.min(1, Number(c.value)));
+    if (c.action === 'eq') equalizer.set(c.value);
     if (c.action === 'mute') muted = !!c.value;
     if (c.action === 'reset-peak') for (const s of records.values()) s.peak = 0;
     return { ok: true, selectedMode: selected.mode, selectedDeviceId: selected.deviceId, selectionGeneration,
-      activeMode: activeInfo?.mode || null, activeInfo, muted, gain,
-      streams: Array.from(records, ([id, s]) => ({ id, ...s, buffer: undefined, scratch: undefined, floatScratch: undefined })) };
+      activeMode: activeInfo?.mode || null, activeInfo, muted, gain, eq: equalizer.get(),
+      streams: Array.from(records, ([id, s]) => ({ id, ...s, buffer: undefined, scratch: undefined, floatScratch: undefined, eqState: undefined })) };
   }
 };
 send({ event: 'adapter-ready', genericDevices: true, muted });

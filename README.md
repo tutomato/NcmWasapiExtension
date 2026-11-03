@@ -4,7 +4,7 @@
 
 **安装后，照常打开原来的网易云图标。** 扩展随客户端自动加载，不需要另开启动器。
 
-当前为实验版本 `0.6.0-preview.2`，已修复直接打开安装向导时报“安装目录尚未初始化”的问题。
+当前为实验版本 `0.7.0-preview.5`。**WASAPI 共享 / 独占输出与参数 EQ 属于同一个“网易云输出扩展”**，共用一个安装程序、一次覆盖升级和一个卸载入口；不用另外安装 EQ 插件。
 
 [安装](#安装) · [使用](#使用) · [更新](#更新) · [卸载](#退出与卸载) · [常见问题](#常见问题)
 
@@ -23,7 +23,7 @@
 | `…-windows-x64-portable.zip` | 手动运行、调试或部署工具使用；仅解压不会安装自动加载 |
 | `…-source.zip` / `Source code` | 开发者使用的源码，普通安装无需下载 |
 
-首次尝试可以选择标有 **Pre-release** 的实验版本。当前版本入口：[v0.6.0-preview.2](https://github.com/tutomato/NcmWasapiExtension/releases/tag/v0.6.0-preview.2)。
+首次尝试可以选择标有 **Pre-release** 的实验版本。请核对安装包版本；0.6 系列不包含参数 EQ。最新源码构建产物也可从本仓库 Actions 下载。
 
 ### 2. 完全退出网易云，选择客户端位置
 
@@ -89,6 +89,18 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\下载的安装包.exe'
 
 以后仍照常从原网易云启动。连接新设备后，扩展会扫描设备及格式能力并更新列表；只有确认能力后才提供相应的独占选项。如果设备刚接入后未出现，请等待列表更新并重新选择设备；必要时完全退出网易云再打开。
 
+### 使用参数 EQ
+
+1. 在输出设备列表中选择 **WASAPI（独占，自动采样率）**。
+2. 播放栏右下角点击 **“…”更多操作 → 音效 → 均衡器 → 参数 EQ**。
+3. 点击频段，编辑频率、增益、Q 和滤波类型，勾选“启用参数 EQ”，然后点击“应用并保存”。
+
+参数 EQ 融入原生音效窗口，沿用皮肤配色；“标准均衡器”切回网易云原来的界面。原生音效总开关与参数 EQ 的启用开关分别控制各自处理，请关闭原有 EQ 和其他音效，避免叠加。
+
+新配置默认总增益、各频段增益均为 **0 dB**。支持 10 段钟形 / 低音搁架 / 高音搁架；频段增益 −18～+18 dB、总增益 −30～0 dB、Q 0.2–20。界面显示范围，超界输入会调整并提示；小数及空白在结束编辑时校正。预览曲线随草稿更新，点击应用后才改变声音。
+
+参数 EQ 仅在本扩展的独占输出中生效，共享 / DirectSound 不经过新 EQ。原采样率切换时按实际流采样率重新计算滤波系数。此版本没有 VST 插件宿主、动态 EQ 或线性相位模式。参数保存在 `%LOCALAPPDATA%\NcmWasapiExtension\equalizer.json`，升级和卸载默认保留个人设置。
+
 ## 更新
 
 当前版本**没有自动更新器**。更新扩展时：
@@ -96,7 +108,9 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\下载的安装包.exe'
 1. 完全退出网易云，包括托盘中的网易云。
 2. 阅读新版发布说明，从 [Releases](https://github.com/tutomato/NcmWasapiExtension/releases) 下载新的 `windows-x64-setup.exe` 并运行。
 3. 确认仍关联同一个 `cloudmusic.exe`，完成安装。
-4. 照常打开原网易云，在 **设置 → 播放 → 输出设备** 中检查输出选项。
+4. 照常打开原网易云，在 **设置 → 播放 → 输出设备** 中检查输出选项；参数 EQ 在原生“音效 → 均衡器”内检查。
+
+从 0.6 系列升级到 0.7，直接运行同一个扩展的新安装包覆盖升级，不需要先卸载，也无需安装第二个插件。
 
 不要在网易云运行时手动覆盖自动加载文件或运行组件。
 
@@ -115,7 +129,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\下载的安装包.exe'
 
 ![在控制面板的“程序和功能”中找到网易云输出扩展并卸载](docs/images/uninstall-entry.jpg)
 
-卸载的是 **网易云输出扩展**。网易云客户端、账户、歌单、下载音乐和客户端缓存会保留。
+卸载的是 **网易云输出扩展**，会同时移除独占输出和参数 EQ。网易云客户端、账户、歌单、下载音乐和客户端缓存会保留。
 
 卸载工具按本项目的归属记录核对自动加载文件，只移除本项目拥有的文件。未知或被其他程序修改的文件不会被当作本项目文件删除。扩展配置和日志位于 `%LOCALAPPDATA%\NcmWasapiExtension`，卸载默认保留。
 
@@ -151,7 +165,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\下载的安装包.exe'
 在 Windows x64 的 Windows PowerShell 5.1 或 PowerShell 7 中，于仓库根目录执行：
 
 ```powershell
-powershell.exe -NoProfile -File .\scripts\build.ps1 -Version 0.6.0-preview.2
+powershell.exe -NoProfile -File .\scripts\build.ps1 -Version 0.7.0-preview.5
 ```
 
 构建脚本按 `dependencies.lock.json` 下载并校验运行组件和工具；需要的 Python、Inno Setup 与原生加载器编译工具会在项目 `.build/` 缓存中准备。构建产物写入 `dist/`。构建、签名和 GitHub 发布流程见[发布说明](docs/RELEASING.md)。

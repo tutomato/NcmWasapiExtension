@@ -189,7 +189,7 @@ def _target(port: int) -> dict | None:
 
 def _install_expression(injection: str, installation: str,
                         token: str, owner: str, ack_timeout: float,
-                        volume_enabled: bool = False) -> str:
+                        volume_enabled: bool = False, eq_source: str = '') -> str:
     # Both script files are trusted local bundle sources. They are embedded as
     # JavaScript, not evaluated as strings, so no browser eval/CSP dependency.
     injection = injection.rstrip().removesuffix(';')
@@ -208,7 +208,7 @@ def _install_expression(injection: str, installation: str,
   let sequence = 0;
   const transport = {
     owner, installed: false, restore: null, lastMode: null, lastDevice: null, volumeError: null,
-    restoreVolume: null,
+    restoreVolume: null, disposeEqualizer: null,
     request(kind, value) {
       if (kind === 'mode' && (!value ||
           (value.mode !== 'shared' && value.mode !== 'exclusive') ||
@@ -218,7 +218,7 @@ def _install_expression(injection: str, installation: str,
         return Promise.reject(new Error('Invalid output volume'));
       if (kind === 'catalog' && !Array.isArray(value))
         return Promise.reject(new Error('Invalid output device list'));
-      if (!['mode', 'volume', 'catalog'].includes(kind))
+      if (!['mode', 'volume', 'catalog', 'eq'].includes(kind))
         return Promise.reject(new Error('Invalid output request'));
       if (window[globalName] !== transport)
         return Promise.reject(new Error('Output bridge was replaced'));
@@ -254,6 +254,7 @@ def _install_expression(injection: str, installation: str,
     dispose(message) {
       transport.installed = false;
       if (transport.restoreVolume) transport.restoreVolume();
+      if (transport.disposeEqualizer) transport.disposeEqualizer();
       for (const request of pending.values()) {
         clearTimeout(request.timer);
         request.reject(new Error(message || 'Output bridge stopped'));
@@ -327,6 +328,7 @@ def _install_expression(injection: str, installation: str,
     transport.restore = await api.restoreMode();
     if (window[globalName] !== transport) throw new Error('Installation superseded');
     transport.installed = true;
+    __EQ_UI__
     return transport.snapshot();
   } catch (error) {
     transport.dispose('Output bridge installation failed');
@@ -343,7 +345,7 @@ def _install_expression(injection: str, installation: str,
         '__BINDING__': json.dumps(BINDING_NAME),
         '__ACK_TIMEOUT__': str(round(ack_timeout * 1000)),
         '__VOLUME_ENABLED__': json.dumps(volume_enabled),
-        '__INJECTION__': injection, '__INSTALLATION__': installation}
+        '__INJECTION__': injection, '__INSTALLATION__': installation, '__EQ_UI__': eq_source}
     for key, value in substitutions.items():
         template = template.replace(key, value)
     return template
@@ -378,6 +380,7 @@ class OutputOptionsBridge:
     def __init__(self, select_mode: Callable[[str, dict], Any], *,
                  get_catalog: Callable[[], dict],
                  set_volume: Callable[[float], Any] | None = None,
+                 set_equalizer: Callable | None = None,
                  port: int = DEFAULT_PORT, injection_path=None,
                  installation_path=None, poll_interval: float = 1,
                  ack_timeout: float = 10, on_status: Callable | None = None):
@@ -392,6 +395,8 @@ class OutputOptionsBridge:
         self.select_mode = select_mode
         self.get_catalog = get_catalog
         self.set_volume = set_volume
+        self.set_equalizer = set_equalizer
+        self._eq_clients = {}
         self.port = int(port)
         self.injection_path = pathlib.Path(injection_path) if injection_path else \
             _source_path('output-option-inject.js')
@@ -459,6 +464,8 @@ class OutputOptionsBridge:
                     not isinstance(payload.get('id'), str)):
                 return
             kind = payload.get('kind')
+            if client is not self._client and (client not in list(self._eq_clients.values()) or kind != 'eq'):
+                return
             value = payload.get('value')
             request = (client, event.get('executionContextId'), payload)
             if (kind == 'mode' and isinstance(value, dict) and
@@ -467,6 +474,11 @@ class OutputOptionsBridge:
                 if device is None:
                     return
                 payload['value'] = {'mode': value['mode'], 'device': device}
+                self._requests.put_nowait(request)
+            elif kind == 'eq' and self.set_equalizer is not None:
+                if value is not None:
+                    from eq_settings import validate
+                    payload['value'] = validate(value)
                 self._requests.put_nowait(request)
             elif (kind == 'volume' and self.set_volume is not None and
                     isinstance(value, (int, float)) and not isinstance(value, bool) and
@@ -486,7 +498,7 @@ class OutputOptionsBridge:
 
     def _current_request(self, request):
         client, _, payload = request
-        return (client is self._client and not client.closed.is_set() and
+        return ((client is self._client or client in list(self._eq_clients.values())) and not client.closed.is_set() and
                 payload['owner'] == self._owner and not self.stop_event.is_set())
 
     def _acknowledge(self, requests, ok, message):
@@ -523,6 +535,12 @@ class OutputOptionsBridge:
                 message = json.loads(encoded)
                 changes = {'catalog_generation': result.get('generation')}
                 result = True
+            elif kind == 'eq':
+                message = self.set_equalizer(value)
+                if not isinstance(message, dict):
+                    raise CdpError('EQ returned invalid status')
+                json.dumps(message, allow_nan=False)
+                result = True
             elif kind == 'mode':
                 result = self.select_mode(value['mode'], value['device'])
                 changes = {'mode': value['mode'], 'device': value['device']}
@@ -550,7 +568,7 @@ class OutputOptionsBridge:
             except queue.Empty:
                 request = None
             if request is not None:
-                self._apply('mode', [request])
+                self._apply(request[2]['kind'], [request])
                 continue
             with self._lock:
                 catalogs, self._catalog_requests = self._catalog_requests, []
@@ -562,11 +580,64 @@ class OutputOptionsBridge:
     def _install(self, client):
         injection = self.injection_path.read_text(encoding='utf-8-sig')
         installation = self.installation_path.read_text(encoding='utf-8-sig')
+        self._close_eq_clients()
         self._owner = secrets.token_urlsafe(18)
         return client.evaluate(_install_expression(
             injection, installation, self._token, self._owner, self.ack_timeout,
             volume_enabled=self.set_volume is not None),
             timeout=self.ack_timeout + 10)
+
+    def _close_eq_clients(self):
+        clients=list(self._eq_clients.values())
+        self._eq_clients.clear()
+        for client in clients:
+            try:
+                client.evaluate('(function(){const b=window['+json.dumps(BRIDGE_GLOBAL)+'];if(b&&b.dispose)b.dispose();})()',timeout=1)
+            except Exception: pass
+            client.close()
+
+    def _sync_eq_panels(self):
+        if self.set_equalizer is None or self.stop_event.is_set():return
+        try:
+            with urllib.request.urlopen(f'http://127.0.0.1:{self.port}/json/list',timeout=2) as response:
+                pages=json.load(response)
+            if not isinstance(pages,list) or len(pages)>64:raise CdpError('Invalid EQ target list')
+            wanted={}
+            for page in pages:
+                if not isinstance(page,dict) or page.get('type')!='page':continue
+                u=urllib.parse.urlparse(page.get('url',''))
+                if u.scheme!='orpheus' or u.netloc!='orpheus' or u.path!='/pub/subApp.html':continue
+                if urllib.parse.parse_qs(u.query).get('route')!=['audioEffect']:continue
+                endpoint=urllib.parse.urlparse(page.get('webSocketDebuggerUrl',''))
+                if endpoint.scheme!='ws' or endpoint.hostname not in ('127.0.0.1','localhost','::1') or endpoint.port!=self.port or endpoint.username or endpoint.password:
+                    raise CdpError('Unexpected EQ debug endpoint')
+                if isinstance(page.get('id'),str):wanted[page['id']]=page
+            for target,client in list(self._eq_clients.items()):
+                if target not in wanted or client.closed.is_set():
+                    self._eq_clients.pop(target,None);client.close()
+            for target,page in wanted.items():
+                if self.stop_event.is_set():return
+                client=self._eq_clients.get(target)
+                try:
+                    if client is None:
+                        client=_Connection(page['webSocketDebuggerUrl'],self._on_event)
+                        self._eq_clients[target]=client
+                        client.call('Runtime.enable')
+                        client.call('Runtime.addBinding',{'name':BINDING_NAME})
+                    current=client.evaluate('(function(){const b=window['+json.dumps(BRIDGE_GLOBAL)+'];return b&&b.installed&&b.owner==='+json.dumps(self._owner)+';})()',timeout=2)
+                    if not current:
+                        expression=_source_path('equalizer-transport.js').read_text(encoding='utf-8')
+                        values={'__TOKEN__':json.dumps(self._token),'__OWNER__':json.dumps(self._owner),
+                            '__GLOBAL__':json.dumps(BRIDGE_GLOBAL),'__BINDING__':json.dumps(BINDING_NAME),
+                            '__UI__':_source_path('equalizer-panel.js').read_text(encoding='utf-8')}
+                        for key,value in values.items():expression=expression.replace(key,value)
+                        client.evaluate(expression,timeout=5)
+                    self._update(eq_entry='native-equalizer',eq_error=None)
+                except Exception:
+                    self._eq_clients.pop(target,None);client.close();raise
+        except Exception as exc:
+            # UI integration is independent of the audio stream and main bridge.
+            self._update(eq_error=str(exc))
 
     def _run(self):
         while not self.stop_event.is_set():
@@ -600,6 +671,7 @@ class OutputOptionsBridge:
                                  device=snapshot.get('lastDevice'),
                                  volume=snapshot.get('volume'), restore=snapshot.get('restore'))
                     self.ready_event.set()
+                    self._sync_eq_panels()
                     if self._refresh_requested.is_set():
                         self._refresh_requested.clear()
                         client.evaluate(
@@ -612,6 +684,7 @@ class OutputOptionsBridge:
                     self._update(state='waiting', connected=False, installed=False,
                                  last_error=str(exc))
             finally:
+                self._close_eq_clients()
                 if client:
                     client.close()
                 if self._client is client:

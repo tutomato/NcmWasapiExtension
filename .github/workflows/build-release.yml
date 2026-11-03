@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Build version without v, for example 0.6.0-preview.2'
+        description: 'Build version without v, for example 0.7.0-preview.5'
         type: string
         required: true
-        default: '0.6.0-preview.2'
+        default: '0.7.0-preview.5'
       publish:
         description: 'Publish only when this run uses a v* tag; branches never publish'
         type: boolean
@@ -55,7 +55,7 @@ jobs:
           } elseif (-not [string]::IsNullOrWhiteSpace($env:VERSION_INPUT)) {
             $releaseVersion = $env:VERSION_INPUT
           } else {
-            $releaseVersion = '0.6.0-preview.2'
+            $releaseVersion = '0.7.0-preview.5'
           }
           if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$') {
             throw 'Invalid version. Use a semantic version without the v prefix.'
@@ -101,6 +101,11 @@ jobs:
             node $_.FullName
             if ($LASTEXITCODE -ne 0) { throw "JavaScript test failed: $($_.Name)" }
           }
+
+      - name: Check native parametric EQ in isolated process
+        run: |
+          python tests/eq_native_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native EQ test failed.' }
 
       - name: Build installer and portable package
         env:
