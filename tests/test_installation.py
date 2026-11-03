@@ -74,7 +74,8 @@ class InstallationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        # Windows TEMP may use an 8.3 alias; match the runtime's canonical paths.
+        self.root = Path(self.temp.name).resolve()
         self.client = self.make_client('arbitrary drive and folder')
         self.manifest = self.pins(self.client)
         self.env = {'LOCALAPPDATA': str(self.root / 'profile' / 'local'),

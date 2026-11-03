@@ -31,7 +31,8 @@ class InstallTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        # Windows TEMP may use an 8.3 alias; fault-injection paths must match it.
+        self.root = Path(self.temp.name).resolve()
         self.client_dir = self.root/'网易云 with spaces'
         self.client_dir.mkdir()
         self.client = self.client_dir/'cloudmusic.exe'

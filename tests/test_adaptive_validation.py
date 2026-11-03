@@ -17,7 +17,8 @@ class AdaptiveValidationTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # Windows TEMP may use an 8.3 alias; match the runtime's canonical paths.
+        self.root = Path(self.temporary.name).resolve()
         self.exe = self.root/'cloudmusic.exe'
         self.exe.write_bytes(fake_pe(marker=b'an-unlisted-update'))
         self.manifest = {'compatibilityMode': 'capabilities', 'clients': [{
