@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
+  <title id="title">网易云输出设备的共享与独占选项示意</title>
+  <desc id="desc">安装后正常打开原网易云，在设置、播放、输出设备中选择同一设备的WASAPI共享或独占选项。图中YULONG为示例设备。</desc>
+  <rect width="1000" height="650" rx="24" fill="#f5f6f8"/>
+  <g font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif">
+    <rect x="36" y="34" width="6" height="34" rx="3" fill="#e63b53"/>
+    <text x="58" y="61" font-size="28" font-weight="700" fill="#20232b">在网易云内选择输出方式</text>
+    <text x="38" y="98" font-size="17" fill="#606775">安装后，照常打开原来的网易云图标，无需另开启动器。</text>
+
+    <g font-size="19" font-weight="600" fill="#353b47">
+      <rect x="38" y="122" width="230" height="52" rx="12" fill="#fff"/>
+      <text x="60" y="155">① 设置（齿轮图标）</text>
+      <text x="289" y="155" fill="#9399a4">→</text>
+      <rect x="328" y="122" width="210" height="52" rx="12" fill="#fff"/>
+      <text x="382" y="155">② 播放</text>
+      <text x="559" y="155" fill="#9399a4">→</text>
+      <rect x="598" y="122" width="364" height="52" rx="12" fill="#fff"/>
+      <text x="696" y="155">③ 输出设备</text>
+    </g>
+
+    <rect x="38" y="200" width="924" height="250" rx="16" fill="#fff" stroke="#e0e3e9"/>
+    <text x="62" y="236" font-size="19" font-weight="600" fill="#303642">输出设备</text>
+    <rect x="62" y="253" width="876" height="48" rx="8" fill="#f8f9fb" stroke="#d5d9e1"/>
+    <text x="80" y="283" font-size="17" fill="#333a46">WASAPI（独占，自动采样率）:扬声器 (YULONG Audio DSD DAC)</text>
+    <path d="M906 273l7 7 7-7" fill="none" stroke="#69717e" stroke-width="2"/>
+
+    <rect x="62" y="312" width="876" height="112" rx="8" fill="#fff" stroke="#d5d9e1"/>
+    <text x="82" y="346" font-size="18" fill="#353b47">WASAPI（共享）:扬声器 (YULONG Audio DSD DAC)</text>
+    <rect x="69" y="365" width="862" height="49" rx="6" fill="#fff0f2"/>
+    <text x="82" y="396" font-size="18" font-weight="600" fill="#b92440">WASAPI（独占，自动采样率）:扬声器 (YULONG Audio DSD DAC)</text>
+    <path d="M903 388l5 5 10-11" fill="none" stroke="#c72e49" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="38" y="472" width="440" height="112" rx="14" fill="#fff"/>
+    <text x="60" y="505" font-size="20" font-weight="700" fill="#303642">共享：多个程序一起用</text>
+    <text x="60" y="537" font-size="17" fill="#606775">网易云、浏览器等可同时通过同一设备发声。</text>
+    <text x="60" y="563" font-size="17" fill="#606775">需要系统提示音时，可以选这一项。</text>
+    <rect x="498" y="472" width="464" height="112" rx="14" fill="#fff"/>
+    <text x="520" y="505" font-size="20" font-weight="700" fill="#b92440">独占：网易云单独使用设备</text>
+    <text x="520" y="537" font-size="17" fill="#606775">优先跟随歌曲采样率，按设备能力协商。</text>
+    <text x="520" y="563" font-size="17" fill="#606775">其他程序暂时不能通过同一设备播放声音。</text>
+    <text x="38" y="623" font-size="15" fill="#737b88">输出选项示意，非客户端截图 · 设备名称和列表以实际电脑为准</text>
+  </g>
+</svg>
