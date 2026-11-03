@@ -1,0 +1,42 @@
+# Generated build/download output
+/build/
+/.build/
+/dist/
+/.cache/
+/artifacts/
+/runtime/
+/tests/native_autoload/fixture-*/
+/source-bundles/
+
+# Local runtime state and debugging output
+**/__pycache__/
+*.py[cod]
+*.log
+**/logs/
+**/state.json
+**/debug.log
+.venv/
+venv/
+
+# Signing credentials and local settings
+*.pfx
+*.p12
+*.key
+*.user
+.env
+.env.*
+.vscode/
+.idea/
+
+# User music and client caches must never enter the repository
+*.ncm
+*.mp3
+*.flac
+*.wav
+*.m4a
+*.aac
+*.ogg
+*.wma
+*.dmp
+Thumbs.db
+.DS_Store

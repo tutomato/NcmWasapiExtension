@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "python": {
+    "filename": "python-3.12.10-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+    "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
+  },
+  "wheels": [
+    {
+      "filename": "frida-17.25.1-cp37-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/43/23/40618197e07ba5df23f02c9e96f425d603dfab8a63179c13f221525cba13/frida-17.25.1-cp37-abi3-win_amd64.whl",
+      "sha256": "8b605875b1646671989b60314c6c99b0cb350947154d0dc752f6f0c9959b456c"
+    },
+    {
+      "filename": "websocket_client-1.9.2-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/d5/d2/cc4dc1271e464942db7ee278baae2daa99ee77cb2af744025c04da585a3e/websocket_client-1.9.2-py3-none-any.whl",
+      "sha256": "e1a673830a9c7bfa47b1cd3d5e4178f4c9651d80a4eab02c9c23a1c3ec6250ce"
+    }
+  ],
+  "innoSetup": {
+    "filename": "innosetup-6.7.4.exe",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe",
+    "sha256": "a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c"
+  },
+  "fridaBaseLicense": {
+    "filename": "Frida-COPYING.LIB",
+    "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.0.txt",
+    "sha256": "cc535c21133c895b56b374c8a1dc1eb948d99003ed2b47372069456b62f42b24"
+  },
+  "zig": {
+    "filename": "ziglang-0.13.0-py3-none-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/e0/0c/66f4710aedf5544e15779ff9c6e770322986e15daf9299b1a4df0be19e09/ziglang-0.13.0-py3-none-win_amd64.whl",
+    "sha256": "b64b2aa936ebbfeecfbb2611df331a5474edebe1246b98c2f56d6ae4d58b71fc"
+  }
+}

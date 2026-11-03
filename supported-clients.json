@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "compatibilityMode": "capabilities",
+  "clients": [
+    {
+      "id": "netease-3.1.42.205594-x64",
+      "version": "3.1.42.205594",
+      "architecture": "x64",
+      "sha256": {
+        "cloudmusic.exe": "1d593a307e074368cb9539d3aa86577231c8b53c6e966d43bf7661a25f165ad3",
+        "cloudmusic.dll": "557d7706dedc8556a8bd279d4dfe2bc05b80ad729a8749caccd9e29916935493",
+        "avcodec-58.dll": "6b9dde6b42f0f51a9009a02c0571922881f8627bfe96be94b77af0927ee5c303",
+        "avutil-56.dll": "1fdad3dd763ea004ddaf2f99bec3b238a640a17238f03e9b20edd3e1e7793c1e",
+        "swresample-3.dll": "2e3a886d9638ee5af22b810703de7a068ac7521bc09d36f5b45a48ca329bad42",
+        "package/orpheus.ntpk": "170413b1675708e87a9e89c2d122a8643a51e86b5b5ae1c6260cfeaf25b19be4"
+      },
+      "notes": "Regression baseline only. Automatic compatibility uses verified engine structure, PE function boundaries, imports and FFmpeg ABI, not this whole-client hash allowlist."
+    }
+  ]
+}

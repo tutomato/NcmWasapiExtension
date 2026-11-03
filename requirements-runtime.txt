@@ -1,0 +1,4 @@
+# Runtime versions are intentionally pinned. Build download hashes are managed
+# by scripts/build.ps1 and dependencies.lock.json.
+frida==17.25.1
+websocket-client==1.9.2
