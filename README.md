@@ -23,7 +23,7 @@
 | `…-windows-x64-portable.zip` | 手动运行、调试或部署工具使用；仅解压不会安装自动加载 |
 | `…-source.zip` / `Source code` | 开发者使用的源码，普通安装无需下载 |
 
-首次尝试可以选择标有 **Pre-release** 的实验版本。请核对安装包版本；0.6 系列不包含参数 EQ。最新源码构建产物也可从本仓库 Actions 下载。
+首次尝试可以选择标有 **Pre-release** 的实验版本。请核对安装包版本；0.6 系列不包含参数 EQ。对应版本入口：[v0.7.0-preview.5](https://github.com/tutomato/NcmWasapiExtension/releases/tag/v0.7.0-preview.5)。最新源码构建产物也可从本仓库 Actions 下载。
 
 ### 2. 完全退出网易云，选择客户端位置
 
