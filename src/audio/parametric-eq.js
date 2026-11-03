@@ -63,6 +63,14 @@ function createParametricEq() {
         s->bank[b].gain=1;
       } s->current=0; s->remaining=0; s->total=0;
     }
+    void fade_in(float *pcm, unsigned int frames, unsigned int channels,
+        unsigned int position, unsigned int total) {
+      unsigned int f,ch;
+      for(f=0;f<frames && position+f<total;f++) {
+        double x=(double)(position+f)/(total-1), gain=x*x*(3-2*x);
+        for(ch=0;ch<channels;ch++) pcm[f*channels+ch]=(float)(pcm[f*channels+ch]*gain);
+      }
+    }
     void process(State *s, float *pcm, unsigned int frames, unsigned int channels) {
       unsigned int f,ch;
       for(f=0;f<frames;f++) {
@@ -84,12 +92,19 @@ function createParametricEq() {
   const configure=new NativeFunction(module.configure,'void',['pointer','pointer','double','uint'],{scheduling:'exclusive'});
   const reset=new NativeFunction(module.reset,'void',['pointer'],{scheduling:'exclusive'});
   const process=new NativeFunction(module.process,'void',['pointer','pointer','uint','uint'],{scheduling:'exclusive'});
+  const fadeIn=new NativeFunction(module.fade_in,'void',['pointer','uint','uint','uint','uint'],{scheduling:'exclusive'});
   let config=validateEq({enabled:false,preamp:0,bands:[]}), generation=0;
   return {
     nativeModule: module, // Keep executable CModule memory alive with the DSP owner.
     set(value) { config=validateEq(value); generation++; return config; },
     get() { return config; },
     reset(stream) { if(stream.eqState) reset(stream.eqState); stream.eqGeneration=-1; },
+    fadeIn(stream, pcm, frames) {
+      const total=Math.max(2,Math.round(stream.rate*.005)),position=stream.startupFrames||0;
+      if(position>=total)return;
+      fadeIn(pcm,frames,stream.channels,position,total);
+      stream.startupFrames=Math.min(total,position+frames);
+    },
     process(stream, pcm, frames) {
       if(!config.enabled && !stream.eqState) return;
       if(!stream.eqState) { stream.eqState=Memory.alloc(size); reset(stream.eqState); stream.eqGeneration=-1; }
@@ -100,7 +115,10 @@ function createParametricEq() {
           const values=b?eqCoefficients(b,stream.rate):[1,0,0,0,0];
           values.forEach((v,j)=>c.add((i*5+j)*8).writeDouble(v));
         }
-        configure(stream.eqState,c,config.enabled?Math.pow(10,config.preamp/20):1,Math.max(1,Math.round(stream.rate*.02)));
+        // A new/reset stream has no previous filtered signal to crossfade.
+        // Apply its intended gain immediately; live edits retain the 20 ms blend.
+        configure(stream.eqState,c,config.enabled?Math.pow(10,config.preamp/20):1,
+          stream.eqGeneration===-1?0:Math.max(1,Math.round(stream.rate*.02)));
         stream.eqGeneration=generation;
       }
       process(stream.eqState,pcm,frames,stream.channels);

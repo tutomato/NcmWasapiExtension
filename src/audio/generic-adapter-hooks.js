@@ -279,7 +279,7 @@ function setupClient(c) {
           for (const [key, s] of events) if (s === this.s) events.delete(key);
           events.set(this.handle.toString(), this.s);
         }
-        if (name === 'reset' && r.toInt32() === 0) { this.s.credit = true; equalizer.reset(this.s); }
+        if (name === 'reset' && r.toInt32() === 0) { this.s.credit = true; this.s.startupFrames = 0; equalizer.reset(this.s); }
         send({ event: name, result: r.toString() });
       }
     });
@@ -318,6 +318,7 @@ function setupRender(c) {
         let source = s.scratch;
         if (s.inputKind !== 'f32') { conv.toFloat(s.scratch, s.floatScratch, frames * s.channels, s.inputKind); source = s.floatScratch; }
         equalizer.process(s, source, frames);
+        equalizer.fadeIn(s, source, frames);
         s.peak = Math.max(s.peak, conv.convert(source, s.buffer, frames * s.channels, s.kind, gain));
         if (frames < s.bufferFrames)
           conv.silence(s.buffer.add(frames * s.blockAlign), (s.bufferFrames - frames) * s.channels, s.kind);

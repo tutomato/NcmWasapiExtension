@@ -38,7 +38,21 @@ rpc.exports={test(){
  eq.set(config(6,0,false));eq.process({rate:48000,channels:2},bypass.a,bypass.n);
  const after=new Uint8Array(bypass.a.readByteArray(bypass.n*8));
  assert(before.every((v,i)=>v===after[i]),'disabled bypass');
- return {passed:true,responseCases:cases,canaries:true,channelIsolation:true,blockInvariant:true,bypassExact:true};
+ // Fresh-stream preamp applies on the very first sample, never via dry bypass.
+ eq.set({enabled:true,preamp:-12,bands:[]});
+ const fresh=Memory.alloc(4);fresh.writeFloat(.8);eq.process({rate:48000,channels:1},fresh,1);
+ assert(Math.abs(fresh.readFloat()-.8*Math.pow(10,-12/20))<1e-6,'startup preamp bypass');
+ // Boundary fade starts at zero, is block independent, and leaves steady PCM exact.
+ for(const rate of [44100,48000,96000])for(const channels of [1,2]){
+   const frames=Math.round(rate*.01),a=Memory.alloc(frames*channels*4),b=Memory.alloc(frames*channels*4);
+   for(let i=0;i<frames*channels;i++){a.add(i*4).writeFloat(.8);b.add(i*4).writeFloat(.8);}
+   const sa={rate,channels},sb={rate,channels};eq.fadeIn(sa,a,frames);
+   for(let f=0;f<frames;f+=73)eq.fadeIn(sb,b.add(f*channels*4),Math.min(73,frames-f));
+   assert(a.readFloat()===0,'first sample is not zero');
+   for(let i=0;i<frames*channels;i++)assert(a.add(i*4).readFloat()===b.add(i*4).readFloat(),'fade block invariance');
+   assert(a.add((frames-1)*channels*4).readFloat()===Math.fround(.8),'fade changed steady PCM');
+ }
+ return {startupGain:true,startupFade:true,passed:true,responseCases:cases,canaries:true,channelIsolation:true,blockInvariant:true,bypassExact:true};
 }};
 '''
 
