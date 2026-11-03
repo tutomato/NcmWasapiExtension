@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')]
-    [string]$Version = '0.7.0-preview.5',
+    [string]$Version = '0.7.0-preview.6',
     [string]$InnoCompiler,
     [string]$ZigCompiler,
     [switch]$PayloadOnly
@@ -72,7 +72,7 @@ $guardEnd = $nativeSource.IndexOf('function createNativeSourceTracker')
 if ($guardEnd -lt 0) { throw 'Native compatibility guard is missing' }
 $guard = $nativeSource.Substring(0,$guardEnd) + "`nrpc.exports={verify(){const c=resolveNativeSourceCompatibility(globalThis.__ncmCompatibility);return {ok:true,workerRva:c.workerRva,versions:c.versions};}};`n"
 [IO.File]::WriteAllText((Join-Path $payload 'compatibility-guard.js'), $guard, $utf8)
-foreach ($name in @('output-option-inject.js','install_output_options.js','equalizer-panel.js','equalizer-transport.js')) { Copy-SourceFile ('src\frontend\' + $name) $payload }
+foreach ($name in @('output-option-inject.js','install_output_options.js','equalizer-panel.js','equalizer-transport.js','equalizer-playbar.js')) { Copy-SourceFile ('src\frontend\' + $name) $payload }
 foreach ($name in @('supported-clients.json','dependencies.lock.json','LICENSE','README.md','THIRD_PARTY_NOTICES.md')) { Copy-SourceFile $name $payload }
 Copy-Item -LiteralPath (Join-Path $repo 'docs') -Destination (Join-Path $payload 'docs') -Recurse
 Copy-Item -LiteralPath (Join-Path $runtime 'LICENSE.txt') -Destination (Join-Path $licenses 'Python-LICENSE.txt')

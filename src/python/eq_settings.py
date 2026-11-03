@@ -32,6 +32,34 @@ def validate(value):
     return result
 
 
+def validate_request(value):
+    """Control commands never carry draft filter parameters."""
+    if not isinstance(value, dict):
+        raise ValueError('EQ 请求无效')
+    if 'action' not in value:
+        return validate(value)
+    if value.get('action') == 'enable' and set(value) == {'action', 'enabled'} and type(value['enabled']) is bool:
+        return {'action': 'enable', 'enabled': value['enabled']}
+    if value.get('action') == 'reset' and set(value) == {'action'}:
+        return {'action': 'reset'}
+    raise ValueError('EQ 控制请求无效')
+
+
+def resolve_update(current, request):
+    current = validate(current)
+    request = validate_request(request)
+    if request.get('action') == 'enable':
+        current['enabled'] = request['enabled']
+        return current
+    if request.get('action') == 'reset':
+        result = defaults()
+        result['enabled'] = current['enabled']
+        return result
+    # Applying parameters must never toggle the effect as a side effect.
+    request['enabled'] = current['enabled']
+    return request
+
+
 def settings_path():
     override = os.environ.get('NCM_WASAPI_DATA_DIR')
     base = Path(override) if override else Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local')) / 'NcmWasapiExtension'

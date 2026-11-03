@@ -8,6 +8,25 @@ import eq_settings as eq
 
 
 class EqSettingsTests(unittest.TestCase):
+    def test_control_and_parameter_requests_are_independent(self):
+        current=eq.defaults();current['bands'][0]['gain']=-9
+        on=eq.resolve_update(current,{'action':'enable','enabled':True})
+        self.assertTrue(on['enabled']);self.assertEqual(on['bands'][0]['gain'],-9)
+        draft=eq.defaults();draft['enabled']=False;draft['bands'][0]['gain']=4
+        applied=eq.resolve_update(on,draft)
+        self.assertTrue(applied['enabled']);self.assertEqual(applied['bands'][0]['gain'],4)
+        reset=eq.resolve_update(applied,{'action':'reset'})
+        self.assertTrue(reset['enabled']);self.assertEqual(reset['preamp'],0)
+        self.assertTrue(all(b['gain']==0 and b['q']==1 for b in reset['bands']))
+        off=eq.resolve_update(applied,{'action':'enable','enabled':False})
+        self.assertFalse(off['enabled']);self.assertEqual(off['bands'][0]['gain'],4)
+        self.assertFalse(current['enabled']);self.assertEqual(current['bands'][0]['gain'],-9)
+
+    def test_control_request_validation(self):
+        for value in ({'action':'enable','enabled':1},{'action':'enable','enabled':True,'bands':[]},
+                      {'action':'reset','enabled':True},{'action':'anything'},[]):
+            with self.assertRaises(ValueError):eq.validate_request(value)
+
     def test_default_gain_is_zero(self):
         c=eq.defaults()
         self.assertEqual(c['preamp'],0)

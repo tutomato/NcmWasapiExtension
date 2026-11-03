@@ -189,7 +189,7 @@ def _target(port: int) -> dict | None:
 
 def _install_expression(injection: str, installation: str,
                         token: str, owner: str, ack_timeout: float,
-                        volume_enabled: bool = False, eq_source: str = '') -> str:
+                        volume_enabled: bool = False, eq_source: str = '', playbar_source: str = '') -> str:
     # Both script files are trusted local bundle sources. They are embedded as
     # JavaScript, not evaluated as strings, so no browser eval/CSP dependency.
     injection = injection.rstrip().removesuffix(';')
@@ -208,7 +208,7 @@ def _install_expression(injection: str, installation: str,
   let sequence = 0;
   const transport = {
     owner, installed: false, restore: null, lastMode: null, lastDevice: null, volumeError: null,
-    restoreVolume: null, disposeEqualizer: null,
+    restoreVolume: null, disposeEqualizer: null, disposeEqPlaybar: null,
     request(kind, value) {
       if (kind === 'mode' && (!value ||
           (value.mode !== 'shared' && value.mode !== 'exclusive') ||
@@ -255,6 +255,7 @@ def _install_expression(injection: str, installation: str,
       transport.installed = false;
       if (transport.restoreVolume) transport.restoreVolume();
       if (transport.disposeEqualizer) transport.disposeEqualizer();
+      if (transport.disposeEqPlaybar) transport.disposeEqPlaybar();
       for (const request of pending.values()) {
         clearTimeout(request.timer);
         request.reject(new Error(message || 'Output bridge stopped'));
@@ -329,6 +330,7 @@ def _install_expression(injection: str, installation: str,
     if (window[globalName] !== transport) throw new Error('Installation superseded');
     transport.installed = true;
     __EQ_UI__
+    __PLAYBAR_UI__
     return transport.snapshot();
   } catch (error) {
     transport.dispose('Output bridge installation failed');
@@ -345,7 +347,7 @@ def _install_expression(injection: str, installation: str,
         '__BINDING__': json.dumps(BINDING_NAME),
         '__ACK_TIMEOUT__': str(round(ack_timeout * 1000)),
         '__VOLUME_ENABLED__': json.dumps(volume_enabled),
-        '__INJECTION__': injection, '__INSTALLATION__': installation, '__EQ_UI__': eq_source}
+        '__INJECTION__': injection, '__INSTALLATION__': installation, '__EQ_UI__': eq_source, '__PLAYBAR_UI__': playbar_source}
     for key, value in substitutions.items():
         template = template.replace(key, value)
     return template
@@ -477,8 +479,8 @@ class OutputOptionsBridge:
                 self._requests.put_nowait(request)
             elif kind == 'eq' and self.set_equalizer is not None:
                 if value is not None:
-                    from eq_settings import validate
-                    payload['value'] = validate(value)
+                    from eq_settings import validate_request
+                    payload['value'] = validate_request(value)
                 self._requests.put_nowait(request)
             elif (kind == 'volume' and self.set_volume is not None and
                     isinstance(value, (int, float)) and not isinstance(value, bool) and
@@ -540,6 +542,7 @@ class OutputOptionsBridge:
                 if not isinstance(message, dict):
                     raise CdpError('EQ returned invalid status')
                 json.dumps(message, allow_nan=False)
+                self._publish_eq_state(message)
                 result = True
             elif kind == 'mode':
                 result = self.select_mode(value['mode'], value['device'])
@@ -554,6 +557,18 @@ class OutputOptionsBridge:
             ok, message = False, str(exc) or 'Native output setting failed'
             self._update(last_error=message)
         self._acknowledge(requests, ok, message)
+
+    def _publish_eq_state(self, state):
+        client=self._client
+        if not client or client.closed.is_set():return
+        try:
+            client.evaluate('(function(){const b=window['+json.dumps(BRIDGE_GLOBAL)+'];if(b&&b.owner==='+json.dumps(self._owner)+'&&b.setEqState)b.setEqState('+json.dumps(state,allow_nan=False)+');})()',timeout=2)
+        except Exception:pass  # Readback polling repairs a reload or missed notification.
+
+    def set_native_standard_eq(self, enabled):
+        client=self._client
+        if not client or client.closed.is_set():raise CdpError('网易云界面尚未就绪')
+        return client.evaluate('(async function(){const a=window.__codexOutputOptions;if(!a||!a.setNativeStandardEqEnabled)throw Error("原生均衡器接口不可用");return await a.setNativeStandardEqEnabled('+json.dumps(bool(enabled))+');})()',timeout=8)
 
     def _dispatch(self):
         while not self.stop_event.is_set():
@@ -584,7 +599,8 @@ class OutputOptionsBridge:
         self._owner = secrets.token_urlsafe(18)
         return client.evaluate(_install_expression(
             injection, installation, self._token, self._owner, self.ack_timeout,
-            volume_enabled=self.set_volume is not None),
+            volume_enabled=self.set_volume is not None,
+            playbar_source=_source_path('equalizer-playbar.js').read_text(encoding='utf-8') if self.set_equalizer else ''),
             timeout=self.ack_timeout + 10)
 
     def _close_eq_clients(self):

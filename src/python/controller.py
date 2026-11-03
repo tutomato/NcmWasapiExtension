@@ -111,7 +111,7 @@ def main(argv=None):
     if not args.enable and attach_options is None:
         print_check(report)
         return 0
-    required = ('adapter.js', 'compatibility-guard.js', 'output-option-inject.js', 'install_output_options.js', 'equalizer-panel.js', 'equalizer-transport.js', 'eq_settings.py')
+    required = ('adapter.js', 'compatibility-guard.js', 'output-option-inject.js', 'install_output_options.js', 'equalizer-panel.js', 'equalizer-transport.js', 'equalizer-playbar.js', 'eq_settings.py')
     missing = [name for name in required if not (ROOT / name).is_file()]
     if missing:
         print_check({'ok': False, 'reason': 'runtime-resources-missing', 'files': missing})
@@ -476,12 +476,21 @@ def _run_enabled(report, paths, manifest, debug_port, *, attach_options=None):
                 with rpc_lock:
                     if ending or player_exited.is_set():raise RuntimeError('输出扩展已关闭')
                     if value is not None:
-                        value=eq_settings.validate(value)
+                        request=eq_settings.validate_request(value)
                         previous=script.exports_sync.command({'action':'status'})['eq']
-                        script.exports_sync.command({'action':'eq','value':value})
-                        try: eq_settings.save(value)
+                        value=eq_settings.resolve_update(previous,request)
+                        native_changed=False
+                        if request.get('action')=='enable' and value['enabled'] and bridge is not None:
+                            outcome=bridge.set_native_standard_eq(False)
+                            native_changed=bool(outcome and outcome.get('changed'))
+                        try:
+                            script.exports_sync.command({'action':'eq','value':value})
+                            eq_settings.save(value)
                         except Exception:
                             script.exports_sync.command({'action':'eq','value':previous})
+                            if native_changed:
+                                try:bridge.set_native_standard_eq(True)
+                                except Exception:pass
                             raise
                     state=script.exports_sync.command({'action':'status'})
                     return {'config':state.get('eq',eq_settings.defaults()),

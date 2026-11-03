@@ -1,6 +1,8 @@
 /* Mounted only inside NCM's native audio-effect -> equalizer pane. */
 {
-  let mounted=null, disposed=false, mode='standard', config=null, selected=0, lastState=null, busy=false;
+  let mounted=null, disposed=false, mode='standard', config=null, selected=0, lastState=null;
+  let polling=false,pending=0,dirty=false,actionQueue=Promise.resolve(),editRevision=0,toggleRevision=0,openRequested=false,routing=false;
+  try{mode=localStorage.getItem('ncm-parametric-eq-view')||'standard';openRequested=!!localStorage.getItem('ncm-parametric-eq-open');}catch(_){}
   const clone=x=>JSON.parse(JSON.stringify(x));
   function coefficients(b,rate){
     if(!b.enabled||!b.gain||b.frequency>=rate/2)return [1,0,0,0,0];
@@ -22,7 +24,17 @@
     mounted.host.remove();mounted=null;
   }
   function report(message){if(mounted)mounted.root.querySelector('.message').textContent=message;}
-  function status(){if(!mounted||!lastState)return;const e=mounted.root.querySelector('.state');e.textContent=lastState.active?(lastState.config.enabled?'独占 EQ 已启用':'EQ 已关闭'):'等待独占输出';e.title=lastState.rate?lastState.rate+' Hz':'';if(lastState.peak>1)report('输出峰值超限，请降低总增益。');}
+  function status(){
+    if(!mounted||!lastState)return;
+    const e=mounted.root.querySelector('.state');e.textContent=!lastState.config.enabled?'EQ 已关闭':lastState.active?'独占 EQ 已启用':'已开启 · 等待独占输出';e.title=lastState.rate?lastState.rate+' Hz':'';
+    if(!pending&&config){config.enabled=lastState.config.enabled;mounted.root.querySelector('#enabled').checked=config.enabled;}
+    if(lastState.peak>1)report('输出峰值超限，请降低总增益。');
+  }
+  function controls(){if(mounted){mounted.root.querySelector('#apply').disabled=!!pending||!config;mounted.root.querySelector('#reset').disabled=!!pending||!config;mounted.root.querySelector('#enabled').disabled=!config;}}
+  function enqueue(action){pending++;controls();const result=actionQueue.then(action);actionQueue=result.catch(()=>{});return result.finally(()=>{pending--;controls();status();});}
+  function saveMode(){try{localStorage.setItem('ncm-parametric-eq-view',mode);}catch(_){}}
+  function consumeOpen(){openRequested=false;routing=false;try{localStorage.removeItem('ncm-parametric-eq-open');}catch(_){}}
+
   function applyMode(){
     if(!mounted)return;
     const m=mounted, param=mode==='parametric';
@@ -38,7 +50,7 @@
     for(const input of r.querySelectorAll('input[type=number]'))if(input.value.trim()===''||!input.checkValidity())throw Error(input.getAttribute('aria-label')+'的范围是 '+input.min+'–'+input.max+'，离开输入框后会自动调整。');
     b.frequency=Number(r.querySelector('#frequency').value);b.gain=Number(r.querySelector('#gain').value);b.q=Number(r.querySelector('#q').value);
     b.type=r.querySelector('#type').value;b.enabled=r.querySelector('#band-enabled').checked;
-    config.enabled=r.querySelector('#enabled').checked;config.preamp=Number(r.querySelector('#preamp').value);
+    config.preamp=Number(r.querySelector('#preamp').value);
   }
   function draw(){
     if(!mounted||!config)return;
@@ -88,18 +100,20 @@
   }
   async function refresh(initial){
     syncTheme();
-    if(busy||disposed||!mounted)return;busy=true;const target=mounted;
-    try{const s=await transport.request('eq',null);if(target!==mounted||disposed)return;lastState=s;if(initial){config=clone(s.config);if(!config.bands.length)config.bands=[{enabled:true,type:'bell',frequency:1000,gain:0,q:1}];while(config.bands.length<10)config.bands.push({enabled:false,type:'bell',frequency:1000,gain:0,q:1});render();}status();}
-    catch(e){if(target===mounted)report(e.message);}finally{busy=false;}
+    if(polling||pending||disposed||!mounted)return;polling=true;const target=mounted;
+    try{const s=await transport.request('eq',null);if(target!==mounted||disposed)return;lastState=s;if(initial||!dirty){config=clone(s.config);if(!config.bands.length)config.bands=[{enabled:true,type:'bell',frequency:1000,gain:0,q:1}];while(config.bands.length<10)config.bands.push({enabled:false,type:'bell',frequency:1000,gain:0,q:1});render();}status();controls();}
+    catch(e){if(target===mounted)report(e.message);}finally{polling=false;}
   }
   function mount(){
     if(disposed)return;
+    if(openRequested){const tab=[...document.querySelectorAll('[role=tab]')].find(t=>/\/audioEffect\/soundEffect$/.test(t.id));if(tab&&tab.getAttribute('aria-selected')!=='true'&&!routing){routing=true;tab.click();}}
     const candidates=[...document.querySelectorAll('[role=tabpanel]')].filter(p=>/\/audioEffect\/soundEffect$/.test(p.id)&&p.getAttribute('aria-hidden')!=='true');
     const pane=candidates.length===1?candidates[0]:null;
-    if(mounted&&mounted.pane===pane&&mounted.host.isConnected)return;
+    if(mounted&&mounted.pane===pane&&mounted.host.isConnected){if(openRequested){mode='parametric';saveMode();applyMode();consumeOpen();}return;}
     release();if(!pane)return;
     const nativeTab=[...document.querySelectorAll('[role=tab]')].find(t=>/\/audioEffect\/soundEffect$/.test(t.id));
     if(!nativeTab||nativeTab.getAttribute('aria-selected')!=='true')return;
+    if(openRequested){mode='parametric';saveMode();}
     const host=document.createElement('div');host.id='ncm-parametric-equalizer';
     const sourceStyle=getComputedStyle(nativeTab),slider=pane.querySelector('.cmd-slider-track');
     host.style.cssText='display:block;color:'+sourceStyle.color+';font-family:'+sourceStyle.fontFamily+';font-size:13px;';
@@ -116,35 +130,48 @@
       .band-header{display:flex;align-items:center;gap:10px;font-size:12px;margin:8px 0}.band-header select{width:124px;padding:3px 7px}.band-title{font-weight:600}.band-header label{margin-left:auto;opacity:.7}.band-header input{accent-color:var(--peq-accent)}.fields{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.fields label{font-size:11px;opacity:.8}.fields input{display:block;margin-top:4px}
       .footer{display:flex;align-items:center;gap:8px;margin-top:12px}.footer button{border:1px solid rgba(127,127,127,.3);border-radius:16px;background:transparent;padding:5px 13px;font-size:12px}.footer #apply{border-color:var(--peq-accent);background:var(--peq-accent);color:#102028;margin-left:auto}.message{font-size:11px;opacity:.6;min-height:17px;padding:7px 0 4px;white-space:normal}.editor{max-height:calc(100vh - 130px);overflow:auto}button:disabled{opacity:.4;cursor:default}
     </style><div class="switcher" role="group" aria-label="均衡器类型"><button data-mode="standard" aria-pressed="true">标准均衡器</button><button data-mode="parametric" aria-pressed="false">参数 EQ</button><span class="state"></span></div>
-    <section class="editor" hidden><div class="toolbar"><label class="enable"><input id="enabled" type="checkbox">启用参数 EQ</label><label class="preamp">总增益（−30–0 dB） <input id="preamp" title="总增益范围 −30～0 dB，超出后自动调整" type="number" min="-30" max="0" step="0.1" aria-label="总增益"> dB</label></div>
+    <section class="editor" hidden><div class="toolbar"><label class="enable"><input id="enabled" type="checkbox" disabled>启用参数 EQ</label><label class="preamp">总增益（−30–0 dB） <input id="preamp" title="总增益范围 −30～0 dB，超出后自动调整" type="number" min="-30" max="0" step="0.1" aria-label="总增益"> dB</label></div>
     <svg class="graph" viewBox="0 0 520 142" role="img" aria-label="均衡器频率响应预览"><g class="grid"><path d="M32 17H500 M32 65H500 M32 113H500 M32 17V113 M141 17V113 M297 17V113 M453 17V113 M500 17V113"/></g><g class="labels"><text x="4" y="21">+24</text><text x="12" y="69">0</text><text x="4" y="117">−24</text><text x="30" y="134">20</text><text x="132" y="134">100</text><text x="291" y="134">1k</text><text x="445" y="134">10k</text><text x="481" y="134">20k Hz</text></g><polyline class="curve" points=""/><g class="dots"></g></svg>
     <div class="bands">${Array.from({length:10},(_,i)=>'<button class="band" data-band="'+i+'" aria-label="选择频段 '+(i+1)+'"><strong>—</strong><small>0 dB</small></button>').join('')}</div>
     <div class="band-header"><span class="band-title">频段 1</span><select id="type" aria-label="滤波类型"><option value="bell">钟形</option><option value="low_shelf">低音搁架</option><option value="high_shelf">高音搁架</option></select><label><input id="band-enabled" type="checkbox">启用此频段</label></div>
     <div class="fields"><label>频率 · Hz<input id="frequency" type="number" min="20" max="20000" step="1" aria-label="频率"></label><label>增益 · −18～+18 dB<input id="gain" title="频段增益范围 −18～+18 dB，超出后自动调整" type="number" min="-18" max="18" step="0.1" aria-label="增益"></label><label>Q 值 · 0.2–20<input id="q" type="number" min="0.2" max="20" step="0.01" aria-label="Q 值"></label></div>
-    <div class="footer"><button id="apply">应用并保存</button></div><div class="message" role="status">仅对独占输出生效，请关闭原有 EQ 和其他音效。</div></section>`;
+    <div class="footer"><button id="reset" disabled>一键重置</button><button id="apply" title="只应用调参；启用开关立即生效" disabled>应用调参</button></div><div class="message" role="status">仅对独占输出生效，请关闭原有 EQ 和其他音效。</div></section>`;
     const extra=nativeTab.parentElement.querySelector('.cmd-tabs-bar-extra');
     mounted={pane,host,root,nativeTab,paneHeight:pane.style.height,paneOverflow:pane.style.overflowY,hidden:[...pane.children].map(node=>({node,display:node.style.display})),extra,extraDisplay:extra?extra.style.display:''};
     pane.style.height='100%';pane.style.overflowY='auto';
     pane.insertBefore(host,pane.firstChild);
-    root.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;applyMode();});
+    root.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;saveMode();applyMode();});
     root.querySelectorAll('[data-band]').forEach(b=>b.onclick=()=>{try{readEditor();selected=Number(b.dataset.band);render();}catch(e){report(e.message);}});
     root.querySelector('.dots').onclick=e=>{if(e.target.dataset.band!==undefined){try{readEditor();selected=Number(e.target.dataset.band);render();}catch(error){report(error.message);}}};
-    root.querySelectorAll('input,select').forEach(input=>{
-      function edit(commit){const notice=normalize(input,commit);try{readEditor();draw();report(notice||(input.id==='q'&&config.bands[selected].gain===0?'当前频段增益为 0 dB，改变 Q 不会改变曲线。':'有未应用的更改'));}catch(e){report(e.message);}}
+    root.querySelectorAll('input:not(#enabled),select').forEach(input=>{
+      function edit(commit){const notice=normalize(input,commit);editRevision++;dirty=true;try{readEditor();draw();report(notice||(input.id==='q'&&config.bands[selected].gain===0?'当前频段增益为 0 dB，改变 Q 不会改变曲线。':'有未应用的更改'));}catch(e){report(e.message);}}
       input.addEventListener('input',()=>edit(false));
       if(input.type==='number'){
         input.addEventListener('blur',()=>edit(true));
         input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();edit(true);}});
       }
     });
-    root.querySelector('#apply').onclick=async()=>{
-      if(busy||!config)return;const target=mounted;busy=true;root.querySelector('#apply').disabled=true;
-      try{root.querySelectorAll('input[type=number]').forEach(input=>normalize(input,true));readEditor();draw();const s=await transport.request('eq',clone(config));if(target!==mounted)return;lastState=s;config=clone(s.config);status();report('已应用并保存');}
-      catch(e){if(target===mounted)report(e.message);}finally{busy=false;if(target===mounted)root.querySelector('#apply').disabled=false;}
+    root.querySelector('#enabled').onchange=()=>{
+      if(!config)return;const enabled=root.querySelector('#enabled').checked,target=mounted,revision=++toggleRevision;
+      enqueue(async()=>{
+        try{const s=await transport.request('eq',{action:'enable',enabled});lastState=s;config.enabled=s.config.enabled;if(target===mounted&&revision===toggleRevision){root.querySelector('#enabled').checked=s.config.enabled;status();report(s.config.enabled?'参数 EQ 已开启，未提交的调参草稿保持不变。':'参数 EQ 已关闭，调参草稿保持不变。');}}
+        catch(e){if(target===mounted&&revision===toggleRevision){root.querySelector('#enabled').checked=!!(lastState&&lastState.config.enabled);report(e.message);}}
+      });
     };
-    applyMode();if(config)render();status();
+    root.querySelector('#reset').onclick=()=>{
+      if(!config||pending)return;const target=mounted,revision=editRevision;
+      enqueue(async()=>{try{const s=await transport.request('eq',{action:'reset'});lastState=s;if(revision===editRevision){config=clone(s.config);dirty=false;selected=0;if(target===mounted)render();}else config.enabled=s.config.enabled;if(target===mounted){status();report('已恢复默认参数并保存，启用状态不变。');}}catch(e){if(target===mounted)report(e.message);}});
+    };
+    root.querySelector('#apply').onclick=()=>{
+      if(pending||!config)return;const target=mounted;
+      let submitted;try{root.querySelectorAll('input[type=number]').forEach(input=>normalize(input,true));readEditor();draw();submitted=clone(config);}catch(e){report(e.message);return;}
+      const revision=editRevision;
+      enqueue(async()=>{try{const s=await transport.request('eq',submitted);lastState=s;if(revision===editRevision){config=clone(s.config);dirty=false;}else config.enabled=s.config.enabled;if(target===mounted){status();report(dirty?'已保存提交的参数，仍有未应用的更改。':'调参已应用并保存。');}}catch(e){if(target===mounted)report(e.message);}});
+    };
+    applyMode();if(config)render();status();controls();if(openRequested)consumeOpen();
   }
   const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-selected','aria-hidden']});mount();
   const timer=setInterval(()=>{if(mounted&&mode==='parametric')refresh(false);},2000);
-  transport.disposeEqualizer=()=>{disposed=true;observer.disconnect();clearInterval(timer);release();};
+  const onStorage=e=>{if(e.key==='ncm-parametric-eq-open'&&e.newValue){openRequested=true;routing=false;mount();}};window.addEventListener('storage',onStorage);
+  transport.disposeEqualizer=()=>{disposed=true;observer.disconnect();clearInterval(timer);window.removeEventListener('storage',onStorage);release();};
 }

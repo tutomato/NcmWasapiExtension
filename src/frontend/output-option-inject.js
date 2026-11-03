@@ -122,7 +122,53 @@
     else notifyDevices();
   }
 
+  let nativeEqType;
+  function uiStore() {
+    const store=contracts.store && contracts.store.store;
+    const redux=store && store.app && store.app._store;
+    return redux && typeof redux.dispatch==='function' && typeof redux.subscribe==='function' ? redux : null;
+  }
+  function standardEqType() {
+    if(nativeEqType!==undefined)return nativeEqType;
+    const matches=new Set();
+    for(const module of Object.values(require.c)) {
+      try {
+        const values=[module.exports,...Object.values(module.exports||{})];
+        for(const value of values)if(value && typeof value==='object' &&
+          Number.isInteger(value.EQUALIZER_AE) && Number.isInteger(value.AUDIO_AE) && Number.isInteger(value.DEVICE_AE))matches.add(value.EQUALIZER_AE);
+      } catch(_) {}
+    }
+    if(matches.size===1)nativeEqType=[...matches][0];
+    return nativeEqType;
+  }
+  function readNativeEqState() {
+    try {
+      const setting=contracts.store.store.getStore().audioEffect.setting,type=standardEqType();
+      return {available:!!uiStore() && type!==undefined, enabled:!!setting.isOn && setting.currentAudioEffect.type===type,
+        standardSelected:setting.currentAudioEffect.type===type};
+    } catch(_){return {available:false,enabled:false,standardSelected:false};}
+  }
+
   const api = {
+    readNativeEqState,
+    subscribeNativeEq(callback) { const store=uiStore();return store?store.subscribe(callback):()=>{}; },
+    async setNativeStandardEqEnabled(enabled) {
+      if(typeof enabled!=='boolean')throw Error('Invalid native EQ switch');
+      const state=readNativeEqState(),store=uiStore();
+      if(!state.available)throw Error('Native equalizer switch contract unavailable');
+      if(!state.standardSelected || state.enabled===enabled)return {changed:false};
+      await store.dispatch({type:'audioEffect/switchNew',payload:{state:enabled}});
+      if(readNativeEqState().enabled!==enabled)throw Error('Native equalizer switch did not finish');
+      return {changed:true};
+    },
+    async openNativeEqualizer() {
+      const store=uiStore();if(!store)throw Error('Native equalizer window contract unavailable');
+      const state=contracts.store.store.getStore(),windows=state.app && state.app.subWindows && state.app.subWindows.audioEffect;
+      if(windows && Object.keys(windows.windowMap||{}).length) {
+        await store.dispatch({type:'app/modalRoute',payload:{route:'audioEffect',push:['/audioEffect/soundEffect']}});
+      } else await store.dispatch({type:'app/modalOpen',payload:{route:'audioEffect',width:574,height:560,path:'/audioEffect/soundEffect'}});
+      return true;
+    },
     version: '5-adaptive-device-options',
     require,
     native,
