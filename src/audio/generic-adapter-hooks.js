@@ -286,15 +286,31 @@ function setupClient(c) {
   intercept(address(c, 14), 'service', {
     onEnter(a) { this.s = records.get(a[0].toString()); this.id = a[1].readU32(); this.out = a[2]; },
     onLeave(r) {
-      if (!this.s || r.toInt32() !== 0 || this.id !== 0xf294acfc) return;
-      const render = this.out.readPointer(); renders.set(render.toString(), this.s); setupRender(render);
+      if (r.toInt32() !== 0 || this.id !== 0xf294acfc) return;
+      const render = this.out.readPointer(), key = render.toString();
+      // COM may reuse a retired render address for an ordinary shared client.
+      // Successful GetService always replaces its previous ownership, even when
+      // the new client is intentionally outside our exclusive records.
+      renders.delete(key);
+      if (this.s && records.get(this.s.client) === this.s) {
+        renders.set(key, this.s); setupRender(render);
+      }
     }
   });
 }
+function managedRender(c) {
+  const key = c.toString(), s = renders.get(key);
+  if (s && records.get(s.client) === s && contexts.get(s.client)?.generation === s.generation) return s;
+  renders.delete(key); return undefined;
+}
 function setupRender(c) {
+  intercept(address(c, 2), 'render-release', {
+    onEnter(a) { this.key = a[0].toString(); this.s = renders.get(this.key); },
+    onLeave(r) { if (r.toUInt32() === 0 && renders.get(this.key) === this.s) renders.delete(this.key); }
+  });
   intercept(address(c, 3), 'get-buffer', {
     onEnter(a) {
-      this.s = renders.get(a[0].toString()); this.out = a[2]; this.frames = a[1].toUInt32();
+      this.s = managedRender(a[0]); this.out = a[2]; this.frames = a[1].toUInt32();
       if (this.s && this.frames <= this.s.bufferFrames) a[1] = ptr(this.s.bufferFrames);
     },
     onLeave(r) {
@@ -309,7 +325,7 @@ function setupRender(c) {
   });
   intercept(address(c, 4), 'release-buffer', {
     onEnter(a) {
-      this.s = renders.get(a[0].toString()); if (!this.s) return;
+      this.s = managedRender(a[0]); if (!this.s) return;
       const s = this.s, frames = a[1].toUInt32(); let flags = a[2].toUInt32();
       if (s.unavailable) flags |= 2;
       else if (frames > s.request || frames > s.bufferFrames) {

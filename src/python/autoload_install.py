@@ -22,7 +22,7 @@ DLL = 'msimg32.dll'
 INI = 'ncm-wasapi-autoload.ini'
 OWNED_FILES = (DLL, INI)
 SCHEMA = 1
-VERSION = '0.7.0-preview.8'
+VERSION = '0.7.0-preview.9'
 
 
 class DeploymentError(Exception):
