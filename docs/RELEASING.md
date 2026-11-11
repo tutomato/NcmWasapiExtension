@@ -2,17 +2,17 @@
 
 `0.6.0-preview.2` 起将安装向导初始化阶段与目标目录读取分开：初始查找只访问显式参数和客户端注册项，客户端页面显示后通过 `WizardDirValue` 读取当前默认位置。最终安装准备和卸载阶段才使用 `app` 常量。正常交互启动回归必须不传 `/NCMCLIENT`、`/DIR` 或静默参数，避免显式参数掩盖默认路径中的错误。
 
-当前扩展版本为 `0.7.0-preview.5`，采用客户端本地自动加载及内部结构、接口检测。安装后直接打开原网易云程序和快捷方式。真实客户端播放实测基线仍为 `3.1.42.205594 x64`；不能把自动识别能力写成“所有网易云版本均已支持”。此项目尚无自动更新器；用户手动下载发行包并安装。没有签名证书时，构建产物应明确标为未签名，不能把 SHA-256 校验称为 Authenticode 签名。
+当前扩展版本为 `0.7.0-preview.10`，采用客户端本地自动加载及内部结构、接口检测。安装后直接打开原网易云程序和快捷方式。真实客户端播放实测基线仍为 `3.1.42.205594 x64`；不能把自动识别能力写成“所有网易云版本均已支持”。此项目尚无自动更新器；用户手动下载发行包并安装。没有签名证书时，构建产物应明确标为未签名，不能把 SHA-256 校验称为 Authenticode 签名。
 
 ## 本地构建
 
 要求 Windows x64，使用系统自带 Windows PowerShell 5.1 或 PowerShell 7，以及 Windows 上可用的 .NET Framework C# 编译环境。先检出源码，再执行：
 
 ```powershell
-powershell.exe -NoProfile -File .\scripts\build.ps1 -Version 0.7.0-preview.5
+powershell.exe -NoProfile -File .\scripts\build.ps1 -Version 0.7.0-preview.10
 ```
 
-`-Version` 使用不带 `v` 的版本号。发布标签使用同一版本并增加 `v` 前缀，例如 `v0.7.0-preview.5`。产品版本与 Windows 的四段文件版本由构建脚本统一处理，不手动修改构建出的二进制版本资源。
+`-Version` 使用不带 `v` 的版本号。发布标签使用同一版本并增加 `v` 前缀，例如 `v0.7.0-preview.10`。产品版本与 Windows 的四段文件版本由构建脚本统一处理，不手动修改构建出的二进制版本资源。
 
 固定组件的来源、版本和校验值由 `dependencies.lock.json` 管理。Python 运行环境和其他组件在构建时取得；缺少 Inno 编译器时，脚本会在项目 `.build/` 下缓存固定的 Inno Setup 6.7.4 工具。可用 `-InnoCompiler` 指定已有的 `ISCC.exe`。清理 `.build/` 会导致下次重新下载，不应把该缓存提交到仓库。
 
@@ -36,8 +36,8 @@ powershell.exe -NoProfile -File .\scripts\build.ps1 -Version 0.7.0-preview.5
 准备好仓库和发布内容后，由仓库维护者执行：
 
 ```powershell
-git tag v0.7.0-preview.5
-git push origin v0.7.0-preview.5
+git tag v0.7.0-preview.10
+git push origin v0.7.0-preview.10
 ```
 
 推送标签会实际触发发布。工作流不能代替维护者确认兼容性、发行说明、组件许可与签名状态。已公开的 Release 不应使用相同标签替换成另一套构建；修复后增加版本号。

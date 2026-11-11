@@ -1,8 +1,8 @@
 #ifndef AppVersion
-  #define AppVersion "0.7.0-preview.9"
+  #define AppVersion "0.7.0-preview.10"
 #endif
 #ifndef WinVersion
-  #define WinVersion "0.7.0.9"
+  #define WinVersion "0.7.0.10"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must be supplied by scripts/build.ps1

@@ -121,19 +121,19 @@ function makeFormat(f, floatInput = false) {
   }
   return p;
 }
-function chooseFormat(c, sourceRate, channels) {
+function chooseFormat(c, sourceRate, channels, processingRate = sourceRate) {
   let mixRate = 0;
   const o = Memory.alloc(8);
   if (raw(c, 8, 'int', ['pointer', 'pointer'])(c, o) === 0) {
     const f = o.readPointer(); mixRate = f.add(4).readU32(); taskFree(f);
   }
-  const rates = [...new Set([sourceRate, mixRate, 48000, 44100, 96000, 88200, 192000, 176400, 32000, 24000, 16000, 8000].filter(x => x >= 8000 && x <= 768000))];
+  const rates = [...new Set([processingRate, sourceRate, mixRate, 48000, 44100, 96000, 88200, 192000, 176400, 32000, 24000, 16000, 8000].filter(x => x >= 8000 && x <= 768000))];
   const channelOrder = [...new Set([channels === 1 ? 1 : 2, 2, 1])];
   let last = 0x88890008;
   const supported = raw(c, 7, 'int', ['pointer', 'int', 'pointer', 'pointer']);
   for (const rate of rates) for (const ch of channelOrder) for (const kind of formatKinds)
     for (const legacy of kind.kind === 's24in32' ? [false] : [false, true]) {
-      const f = { ...kind, rate, sourceRate, channels: ch, legacy, blockAlign: ch * kind.bits / 8 };
+      const f = { ...kind, rate, sourceRate, processingRate, channels: ch, legacy, blockAlign: ch * kind.bits / 8 };
       const p = makeFormat(f), result = supported(c, 1, p, ptr(0)); last = result >>> 0;
       if (result === 0) return f;
       if ([0x88890004, 0x8889000a, 0x8889000e, 0x80070005, 0x80070490].includes(last))
@@ -155,8 +155,12 @@ function setupNegotiation(c) {
       if (!this.target) return;
       this.key = key; this.closest = a[3];
       let choice = choices.get(key);
-      if (!choice) {
-        choice = ctx.endpointMatch ? chooseFormat(a[0], source.rate, a[2].add(2).readU16()) : { error: 'selected-device-unavailable', result: '0x88890004' };
+      // GetMixFormat may have supplied an early decoder-rate proposal. The
+      // player's first format query includes its DSP output rate, which can
+      // differ from the decoder rate. Preserve that request for this client.
+      if (!choice || !queries.has(key)) {
+        const requestedRate = a[2].add(4).readU32();
+        choice = ctx.endpointMatch ? chooseFormat(a[0], source.rate, a[2].add(2).readU16(), requestedRate) : { error: 'selected-device-unavailable', result: '0x88890004' };
         choices.set(key, choice);
         send({ event: 'source-format-bound', client: key, endpointId: ctx.endpointId, ...choice });
       }
